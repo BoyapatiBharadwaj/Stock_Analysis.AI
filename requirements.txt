@@ -9,3 +9,4 @@ plotly
 mysql-connector-python
 scikit-learn
 prophet
+feedparser

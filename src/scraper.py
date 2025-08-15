@@ -1,6 +1,12 @@
 # src/scraper.py
 import yfinance as yf
 from datetime import datetime
+import sys
+import os
+
+# Add the project root directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(r"C:\Users\Babblu\OneDrive\Documents\GitHub\Stock_Analysis.AI\src\scraper.py"))))
+
 from src.database import insert_stock_data
 
 def fetch_and_store_stock(symbol="AAPL"):
@@ -11,10 +17,10 @@ def fetch_and_store_stock(symbol="AAPL"):
         insert_stock_data(
             symbol,
             index.to_pydatetime(),
-            row["Open"],
-            row["High"],
-            row["Low"],
-            row["Close"],
+            float(row["Open"]),
+            float(row["High"]),
+            float(row["Low"]),
+            float(row["Close"]),
             int(row["Volume"])
         )
     print(f"[INFO] Stored {len(data)} records for {symbol}.")
