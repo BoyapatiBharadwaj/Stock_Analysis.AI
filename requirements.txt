@@ -1,0 +1,11 @@
+yfinance
+pandas
+numpy
+beautifulsoup4
+requests
+vaderSentiment
+streamlit
+plotly
+mysql-connector-python
+scikit-learn
+prophet
