@@ -205,6 +205,64 @@ def predict_next_day(symbol="AAPL"):
     print(f"[PRED] {symbol} | last_date={last_date.date()} → next_day_up={pred_up} (p_up={proba_up:.3f})")
     return {"date": str(last_date.date()), "pred_up": pred_up, "p_up": proba_up}
 
+import pandas as pd
+import mysql.connector
+from sklearn.linear_model import LinearRegression
+
+def load_data(use_forex=True):
+    conn = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="yourpassword",
+        database="yourdbname"
+    )
+
+    # Load stock prices
+    price_df = pd.read_sql("SELECT * FROM stock_data", conn)
+    # Load news sentiment
+    sentiment_df = pd.read_sql("SELECT * FROM news_sentiment", conn)
+
+    # Merge stock + sentiment
+    features = price_df.merge(sentiment_df, on="date", how="left")
+
+    if use_forex:
+        forex_df = pd.read_sql("SELECT * FROM forex_news", conn)
+        features = features.merge(forex_df, left_on="date", right_on="event_date", how="left")
+
+        # Map categorical impact to numbers
+        impact_map = {"Low": 1, "Medium": 2, "High": 3}
+        features["impact_score"] = features["impact"].map(impact_map)
+
+        # Fill missing forex fields
+        features = features.fillna(0)
+
+    conn.close()
+    return features
+
+
+def predict_next_day(use_forex=True):
+    df = load_data(use_forex=use_forex)
+
+    # Simple example ML: predict next day's price using regression
+    df = df.sort_values("date")
+    df["target"] = df["close"].shift(-1)  # predict next day's close
+
+    # Drop last row (target = NaN)
+    df = df.dropna()
+
+    X = df[["close", "sentiment_score", "impact_score"]]
+    y = df["target"]
+
+    model = LinearRegression()
+    model.fit(X, y)
+
+    # Predict next value based on last row
+    last_row = df.iloc[-1][["close", "sentiment_score", "impact_score"]].values.reshape(1, -1)
+    prediction = model.predict(last_row)[0]
+
+    return round(prediction, 2)
+
+
 if __name__ == "__main__":
     # Quick CLI usage:
     # python src/predictor.py  (trains & predicts AAPL)

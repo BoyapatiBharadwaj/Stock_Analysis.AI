@@ -11,8 +11,8 @@ from src.database import insert_stock_data
 
 def fetch_and_store_stock(symbol="AAPL"):
     stock = yf.Ticker(symbol)
-    # Pull 3 years of daily historical data
-    data = stock.history(period="3y", interval="1d")
+    # Pull maximum available historical data
+    data = stock.history(period="max", interval="1d")
 
     for index, row in data.iterrows():
         insert_stock_data(

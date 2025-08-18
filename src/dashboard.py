@@ -4,13 +4,66 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(r"C:\Users\Babblu\OneDrive\Documents\GitHub\Stock_Analysis.AI\src\dashboard.py"))))
+
+from src.auth import login, signup
 
 import pandas as pd
 import numpy as np
 import plotly.express as px
 import streamlit as st
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(r"C:\Users\Babblu\OneDrive\Documents\GitHub\Stock_Analysis.AI\src\dashboard.py"))))
+from src.config import TARGET_FX
+from src.forex_factory_scraper import fetch_and_store_fx_news_history
+from src.fx_scraper import fetch_and_store_fx_prices
+from src.database import fetch_fx_news, fetch_fx_prices
+from src.forex_predictor import train_fx, predict_fx
+
+# ... your login gate stays above ...
+
+st.title("Market Insights Dashboard")
+
+tab_prices, tab_news, tab_ml, tab_fx = st.tabs([
+    "Stocks & Predictions", "News Sentiment", "Model Training", "USD News → FX Prediction"
+])
+
+with tab_fx:
+    st.subheader("ForexFactory USD News → Predict USD Strength")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        fx_symbol = st.text_input("FX Pair (yfinance)", value=TARGET_FX, help="e.g., EURUSD=X or USDINR=X")
+        start = st.date_input("Scrape News From", value=(datetime.utcnow().date() - timedelta(days=90)))
+        end = st.date_input("Scrape News To", value=datetime.utcnow().date())
+    with col2:
+        if st.button("Scrape ForexFactory (USD)"):
+            fetch_and_store_fx_news_history(start.isoformat(), end.isoformat(), currency="USD")
+            st.success("Scraped & stored USD news.")
+        if st.button("Fetch FX Prices"):
+            fetch_and_store_fx_prices(symbol=fx_symbol, period="180d", interval="1h")
+            st.success(f"Stored FX prices for {fx_symbol}")
+
+    # Show latest data
+    with st.expander("Latest USD news (from DB)"):
+        df_news = fetch_fx_news("USD")
+        st.dataframe(df_news.tail(50))
+
+    with st.expander("FX prices (from DB)"):
+        df_px = fetch_fx_prices(fx_symbol)
+        st.dataframe(df_px.tail(200))
+
+    # Train & Predict
+    st.markdown("---")
+    train_col, pred_col = st.columns(2)
+    with train_col:
+        if st.button("Train FX Model"):
+            train_fx(symbol=fx_symbol)
+            st.success("FX model trained & saved.")
+    with pred_col:
+        if st.button("Predict USD Strength (Next Day)"):
+            res = predict_fx(symbol=fx_symbol)
+            verdict = "USD likely stronger" if res["usd_stronger_next_day"] else "USD likely weaker"
+            st.metric("Prediction", verdict, delta=f"p={res['prob']:.2f}")
 
 
 # Local imports
@@ -22,6 +75,31 @@ st.set_page_config(
     page_title="AI Stock Sentiment & Prediction Dashboard",
     layout="wide",
 )
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    tab1, tab2 = st.tabs(["Login", "Signup"])
+
+    with tab1:
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        if st.button("Login"):
+            if login(username, password):
+                st.session_state.authenticated = True
+                st.success("Login successful!")
+            else:
+                st.error("Invalid credentials")
+
+    with tab2:
+        new_username = st.text_input("New Username")
+        new_password = st.text_input("New Password", type="password")
+        if st.button("Signup"):
+            signup(new_username, new_password)
+            st.success("User created, now login.")
+    st.stop()
+
 
 # -------------------------
 # Sidebar Controls
@@ -48,6 +126,13 @@ predict = st.sidebar.button("📈 Predict Next Day")
 
 st.sidebar.markdown("---")
 auto_refresh = st.sidebar.checkbox("Auto-refresh data (every 5 min)", value=False)
+
+use_forex = st.sidebar.checkbox("Include Forex News", value=True)
+
+if st.sidebar.button("Predict Next Day"):
+    prediction = predict_next_day(use_forex=use_forex)
+    st.sidebar.success(f"Predicted Next Day Value: {prediction}")
+
 
 # -------------------------
 # Cached Data Loaders
